@@ -291,7 +291,7 @@
 
   async function loadClues() {
     try {
-      const response = await fetch("./pistas.json", { cache: "no-store" });
+      const response = await fetch(new URL("pistas.json", document.baseURI), { cache: "no-store" });
       if (!response.ok) {
         throw new Error(`No se pudo cargar pistas.json (HTTP ${response.status}).`);
       }
