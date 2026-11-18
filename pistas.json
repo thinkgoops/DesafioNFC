@@ -1,8 +1,26 @@
 {
-  "TAG_INICIO": "Bienvenidos al Desafío NFC. Acerca tu teléfono a la tarjeta de inicio para comenzar el desafío.",
-  "TAG_1": "Comunícate con inteligencias de otro mundo.",
-  "TAG_2": "Una analista de presupuesto puede ser la siguiente parada.",
-  "TAG_3": "Un dragón guarda un preciado tesoro.",
-  "TAG_4": "Busca los indicios para avanzar en tu investigación.",
-  "TAG_FINAL": "Escanéa la tarjeta final para completar el desafío."
+  "TAG_INICIO": {
+    "pista": "Bienvenidos al Desafío NFC. Acerca tu teléfono a la tarjeta de inicio para comenzar el desafío.",
+    "felicitacion": "¡Excelente! Has encontrado el punto de partida. ¡El desafío comienza ahora!"
+  },
+  "TAG_1": {
+    "pista": "Comunícate con inteligencias de otro mundo.",
+    "felicitacion": "¡Muy bien! Has recibido sabiduría estelar"
+  },
+  "TAG_2": {
+    "pista": "Una analista de presupuesto puede ser la siguiente parada.",
+    "felicitacion": "¡Buen trabajo! Valentina te ha enseñado lo que sabe."
+  },
+  "TAG_3": {
+    "pista": "Un dragón guarda un preciado tesoro.",
+    "felicitacion": "¡Fantástico! En el castillo encontraste saberes ancestrales."
+  },
+  "TAG_4": {
+    "pista": "Busca los indicios para avanzar en tu investigación.",
+    "felicitacion": "¡Excelente trabajo! Las pistas aportan claridad en tu aventura."
+  },
+  "TAG_FINAL": {
+    "pista": "Escanéa la tarjeta final para completar el desafío.",
+    "felicitacion": "¡Lo lograste! Has completado todo el recorrido. ¡Felicitaciones!"
+  }
 }

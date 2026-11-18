@@ -213,6 +213,7 @@
       <div class="step-label" id="stepLabel">Primer paso</div>
       <h2 id="expectedTag">TAG_INICIO</h2>
       <p id="instruction">Para comenzar, acerca el teléfono a la etiqueta de inicio.</p>
+      <button id="nextButton" class="hidden" type="button">Siguiente</button>
 
       <div class="scan-symbol" aria-hidden="true"><span>⌁</span></div>
       <button id="startButton" type="button">Activar lector NFC</button>
@@ -252,6 +253,7 @@
   let lastReadAt = 0;
   let pistas = new Map();
   let pistasLoaded = false;
+  let awaitingNext = false;
 
   const game = document.getElementById("game");
   const complete = document.getElementById("complete");
@@ -265,6 +267,8 @@
   const progressText = document.getElementById("progressText");
   const progressFill = document.getElementById("progressFill");
   const stepDots = document.getElementById("stepDots");
+  const nextButton = document.getElementById("nextButton");
+  const scanSymbol = document.querySelector(".scan-symbol");
 
   function shuffle(array) {
     const shuffled = [...array];
@@ -293,35 +297,39 @@
       }
 
       const data = await response.json();
-
       if (!data || typeof data !== "object" || Array.isArray(data)) {
-        throw new Error("pistas.json debe contener un objeto JSON con etiquetas y pistas.");
+        throw new Error("pistas.json debe contener un objeto JSON válido.");
       }
 
-      const loaded = new Map(
-        Object.entries(data).map(([tag, clue]) => [
-          String(tag).trim(),
-          typeof clue === "string" ? clue.trim() : ""
-        ])
-      );
-
       const requiredTags = ["TAG_INICIO", ...middleTags, "TAG_FINAL"];
-      const missing = requiredTags.filter(tag => !loaded.has(tag) || !loaded.get(tag));
+      const loaded = new Map();
 
-      if (missing.length) {
-        throw new Error(`Faltan pistas o están vacías para: ${missing.join(", ")}.`);
+      for (const tag of requiredTags) {
+        const entry = data[tag];
+        if (!entry || typeof entry !== "object" || Array.isArray(entry)) {
+          throw new Error(`La configuración de ${tag} debe incluir "pista" y "felicitacion".`);
+        }
+
+        const pista = typeof entry.pista === "string" ? entry.pista.trim() : "";
+        const felicitacion = typeof entry.felicitacion === "string" ? entry.felicitacion.trim() : "";
+
+        if (!pista || !felicitacion) {
+          throw new Error(`${tag} necesita una pista y un mensaje de felicitación no vacíos.`);
+        }
+
+        loaded.set(tag, { pista, felicitacion });
       }
 
       pistas = loaded;
       pistasLoaded = true;
       startButton.disabled = false;
       render();
-      setStatus("Pistas cargadas correctamente. Ya puedes activar el lector NFC.", "good");
+      setStatus("Pistas y felicitaciones cargadas correctamente. Ya puedes activar el lector NFC.", "good");
     } catch (error) {
       pistasLoaded = false;
       startButton.disabled = true;
-      expectedTag.textContent = "No se pudieron cargar las pistas";
-      instruction.textContent = "Revisa que pistas.json esté en la misma carpeta que index.html y contenga un JSON válido.";
+      expectedTag.textContent = "No se pudo cargar la configuración";
+      instruction.textContent = "Revisa que pistas.json esté junto a index.html y contenga una pista y una felicitación para cada etiqueta.";
       setStatus(error.message, "error");
     }
   }
@@ -332,7 +340,7 @@
   }
 
   function render() {
-    const completedSteps = currentIndex;
+    const completedSteps = currentIndex + (awaitingNext ? 1 : 0);
     progressText.textContent = `${completedSteps} de ${totalSteps}`;
     progressFill.style.width = `${(completedSteps / totalSteps) * 100}%`;
 
@@ -342,19 +350,54 @@
       return;
     }
 
-    const currentTag = sequence[currentIndex];
-    expectedTag.textContent = pistas.get(currentTag) || "Pista no disponible";
-    instruction.textContent = getInstruction();
+    game.classList.remove("hidden");
+    complete.classList.add("hidden");
 
-    if (currentIndex === 0) stepLabel.textContent = "Paso 1 · Inicio";
-    else if (currentIndex === totalSteps - 1) stepLabel.textContent = "Paso final · Confirmación";
-    else stepLabel.textContent = `Paso ${currentIndex + 1} · En progreso`;
+    const currentTag = sequence[currentIndex];
+    const entry = pistas.get(currentTag);
+
+    if (awaitingNext) {
+      expectedTag.textContent = entry.felicitacion;
+      instruction.textContent = currentIndex === totalSteps - 1
+        ? "¡Has encontrado la etiqueta final!"
+        : "¡Etiqueta encontrada! Pulsa Siguiente cuando estés listo para continuar.";
+      nextButton.textContent = currentIndex === totalSteps - 1 ? "Finalizar desafío" : "Siguiente";
+      nextButton.classList.remove("hidden");
+      startButton.classList.add("hidden");
+      scanSymbol.classList.add("hidden");
+      statusBox.classList.add("hidden");
+    } else {
+      expectedTag.textContent = entry.pista;
+      instruction.textContent = getInstruction();
+      nextButton.classList.add("hidden");
+      startButton.classList.remove("hidden");
+      scanSymbol.classList.remove("hidden");
+      statusBox.classList.remove("hidden");
+
+      if (currentIndex === 0) stepLabel.textContent = "Paso 1 · Inicio";
+      else if (currentIndex === totalSteps - 1) stepLabel.textContent = "Paso final · Confirmación";
+      else stepLabel.textContent = `Paso ${currentIndex + 1} · En progreso`;
+    }
 
     [...stepDots.children].forEach((dot, index) => {
       dot.className = "step-dot";
-      if (index < currentIndex) dot.classList.add("done");
-      if (index === currentIndex) dot.classList.add("current");
+      if (index < completedSteps) dot.classList.add("done");
+      if (index === currentIndex && !awaitingNext) dot.classList.add("current");
     });
+  }
+
+  function showNextStep() {
+    if (!awaitingNext) return;
+    awaitingNext = false;
+
+    currentIndex++;
+    if (currentIndex >= totalSteps) {
+      render();
+      return;
+    }
+
+    render();
+    setStatus("Busca el lugar indicado por la siguiente pista.", "good");
   }
 
   function createDots() {
@@ -402,21 +445,18 @@
     lastReadValue = value;
     lastReadAt = now;
 
+    if (awaitingNext || currentIndex >= totalSteps) return;
+
     const expected = sequence[currentIndex];
 
     if (value === expected) {
-      // Al validar el inicio, se crea un nuevo orden aleatorio para TAG_1 a TAG_4.
+      // Al validar TAG_INICIO, se genera el orden aleatorio de las etiquetas intermedias.
       if (currentIndex === 0) {
         sequence = ["TAG_INICIO", ...shuffle(middleTags), "TAG_FINAL"];
       }
-      currentIndex++;
-      if (currentIndex === totalSteps) {
-        render();
-        setStatus("¡Desafío completado correctamente!", "good");
-      } else {
-        render();
-        setStatus("¡Pista encontrada! Continúa con la siguiente.", "good");
-      }
+      awaitingNext = true;
+      render();
+      if (navigator.vibrate) navigator.vibrate(120);
     } else {
       setStatus("Esa no es la etiqueta que corresponde a la pista actual. ¡Sigue buscando!", "error");
       if (navigator.vibrate) navigator.vibrate([100, 60, 100]);
@@ -463,6 +503,7 @@
   function resetChallenge() {
     currentIndex = 0;
     sequence = ["TAG_INICIO"];
+    awaitingNext = false;
     lastReadValue = "";
     lastReadAt = 0;
     game.classList.remove("hidden");
@@ -477,6 +518,7 @@
   startButton.addEventListener("click", startScanning);
   resetButton.addEventListener("click", resetChallenge);
   againButton.addEventListener("click", resetChallenge);
+  nextButton.addEventListener("click", showNextStep);
 
   createDots();
   render();
