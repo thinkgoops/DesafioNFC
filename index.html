@@ -240,16 +240,11 @@
 
 <script>
 (() => {
-  // Orden del desafío: inicio, cuatro etiquetas y confirmación final del inicio.
-  const sequence = [
-    "TAG_INICIO",
-    "TAG_1",
-    "TAG_2",
-    "TAG_3",
-    "TAG_4",
-    "TAG_INICIO"
-  ];
-
+  // El inicio siempre va primero y al final. Las cuatro etiquetas intermedias
+  // se mezclan aleatoriamente después de validar el primer TAG_INICIO.
+  const totalSteps = 6;
+  const middleTags = ["TAG_1", "TAG_2", "TAG_3", "TAG_4"];
+  let sequence = ["TAG_INICIO"];
   let currentIndex = 0;
   let reader = null;
   let scanning = false;
@@ -269,14 +264,24 @@
   const progressFill = document.getElementById("progressFill");
   const stepDots = document.getElementById("stepDots");
 
-  const prompts = [
-    "Para comenzar, acerca el teléfono a la etiqueta de inicio.",
-    "¡Inicio validado! Ahora busca y escanea TAG_1.",
-    "¡Correcto! Ahora escanea TAG_2.",
-    "¡Correcto! Ahora escanea TAG_3.",
-    "¡Correcto! Ahora escanea TAG_4.",
-    "¡Último paso! Vuelve a escanear la etiqueta TAG_INICIO para confirmar el recorrido."
-  ];
+  function shuffle(array) {
+    const shuffled = [...array];
+    for (let i = shuffled.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+    }
+    return shuffled;
+  }
+
+  function getInstruction() {
+    if (currentIndex === 0) {
+      return "Para comenzar, acerca el teléfono a la etiqueta de inicio.";
+    }
+    if (currentIndex === totalSteps - 1) {
+      return "¡Último paso! Vuelve a escanear TAG_INICIO para confirmar el recorrido.";
+    }
+    return `¡Correcto! Ahora busca y escanea ${sequence[currentIndex]}.`;
+  }
 
   function setStatus(message, type = "") {
     statusBox.textContent = message;
@@ -285,20 +290,20 @@
 
   function render() {
     const completedSteps = currentIndex;
-    progressText.textContent = `${completedSteps} de ${sequence.length}`;
-    progressFill.style.width = `${(completedSteps / sequence.length) * 100}%`;
+    progressText.textContent = `${completedSteps} de ${totalSteps}`;
+    progressFill.style.width = `${(completedSteps / totalSteps) * 100}%`;
 
-    if (currentIndex >= sequence.length) {
+    if (currentIndex >= totalSteps) {
       game.classList.add("hidden");
       complete.classList.remove("hidden");
       return;
     }
 
     expectedTag.textContent = sequence[currentIndex];
-    instruction.textContent = prompts[currentIndex];
+    instruction.textContent = getInstruction();
 
     if (currentIndex === 0) stepLabel.textContent = "Paso 1 · Inicio";
-    else if (currentIndex === sequence.length - 1) stepLabel.textContent = "Paso final · Confirmación";
+    else if (currentIndex === totalSteps - 1) stepLabel.textContent = "Paso final · Confirmación";
     else stepLabel.textContent = `Paso ${currentIndex + 1} · En progreso`;
 
     [...stepDots.children].forEach((dot, index) => {
@@ -310,11 +315,11 @@
 
   function createDots() {
     stepDots.innerHTML = "";
-    sequence.forEach(() => {
+    for (let i = 0; i < totalSteps; i++) {
       const dot = document.createElement("div");
       dot.className = "step-dot";
       stepDots.appendChild(dot);
-    });
+    }
   }
 
   // En Web NFC, record.data para un registro "text" contiene el texto ya separado
@@ -356,8 +361,12 @@
     const expected = sequence[currentIndex];
 
     if (value === expected) {
+      // Al validar el inicio, se crea un nuevo orden aleatorio para TAG_1 a TAG_4.
+      if (currentIndex === 0) {
+        sequence = ["TAG_INICIO", ...shuffle(middleTags), "TAG_INICIO"];
+      }
       currentIndex++;
-      if (currentIndex === sequence.length) {
+      if (currentIndex === totalSteps) {
         render();
         setStatus("¡Desafío completado correctamente!", "good");
       } else {
@@ -404,6 +413,7 @@
 
   function resetChallenge() {
     currentIndex = 0;
+    sequence = ["TAG_INICIO"];
     lastReadValue = "";
     lastReadAt = 0;
     game.classList.remove("hidden");
