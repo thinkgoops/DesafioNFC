@@ -251,7 +251,7 @@
   let lastReadValue = "";
   let lastReadAt = 0;
   let pistas = new Map();
-  let csvLoaded = false;
+  let pistasLoaded = false;
 
   const game = document.getElementById("game");
   const complete = document.getElementById("complete");
@@ -285,94 +285,43 @@
     return "Busca el lugar indicado por la pista y acerca el teléfono a la etiqueta NFC.";
   }
 
-  // Parser CSV: admite separador coma o punto y coma, y campos entre comillas.
-  function parseCSVLine(line, delimiter) {
-    const fields = [];
-    let field = "";
-    let quoted = false;
-
-    for (let i = 0; i < line.length; i++) {
-      const char = line[i];
-      if (char === '"') {
-        if (quoted && line[i + 1] === '"') {
-          field += '"';
-          i++;
-        } else {
-          quoted = !quoted;
-        }
-      } else if (char === delimiter && !quoted) {
-        fields.push(field.trim());
-        field = "";
-      } else {
-        field += char;
-      }
-    }
-    fields.push(field.trim());
-    return fields;
-  }
-
-  function detectCSVDelimiter(headerLine) {
-    let commas = 0;
-    let semicolons = 0;
-    let quoted = false;
-
-    for (let i = 0; i < headerLine.length; i++) {
-      const char = headerLine[i];
-      if (char === '"') quoted = !quoted;
-      else if (!quoted && char === ",") commas++;
-      else if (!quoted && char === ";") semicolons++;
-    }
-    return semicolons > commas ? ";" : ",";
-  }
-
   async function loadClues() {
     try {
-      // Acepta el nombre recomendado pistas.csv y también pistas(1).csv.
-      let response = await fetch("./pistas.csv", { cache: "no-store" });
+      const response = await fetch("./pistas.json", { cache: "no-store" });
       if (!response.ok) {
-        response = await fetch("./pistas(1).csv", { cache: "no-store" });
-      }
-      if (!response.ok) {
-        throw new Error("No se encontró pistas.csv ni pistas(1).csv. Sube uno de esos archivos junto a index.html.");
+        throw new Error(`No se pudo cargar pistas.json (HTTP ${response.status}).`);
       }
 
-      const csvText = (await response.text()).replace(/^\\uFEFF/, "");
-      const lines = csvText.split(/\\r?\\n/).filter(line => line.trim() !== "");
-      if (lines.length < 2) throw new Error("El archivo CSV está vacío o no contiene pistas.");
+      const data = await response.json();
 
-      const delimiter = detectCSVDelimiter(lines[0]);
-      const headers = parseCSVLine(lines[0], delimiter).map(header => header.toLowerCase());
-      const tagColumn = headers.indexOf("tag");
-      const clueColumn = headers.indexOf("pista");
-      if (tagColumn === -1 || clueColumn === -1) {
-        throw new Error('El CSV debe tener las columnas TAG y Pista, separadas por coma o punto y coma.');
+      if (!data || typeof data !== "object" || Array.isArray(data)) {
+        throw new Error("pistas.json debe contener un objeto JSON con etiquetas y pistas.");
       }
 
-      const loaded = new Map();
-      for (const line of lines.slice(1)) {
-        const columns = parseCSVLine(line, delimiter);
-        const tag = (columns[tagColumn] || "").trim();
-        const clue = (columns[clueColumn] || "").trim();
-        if (tag && clue) loaded.set(tag, clue);
-      }
+      const loaded = new Map(
+        Object.entries(data).map(([tag, clue]) => [
+          String(tag).trim(),
+          typeof clue === "string" ? clue.trim() : ""
+        ])
+      );
 
       const requiredTags = ["TAG_INICIO", ...middleTags, "TAG_FINAL"];
-      const missing = requiredTags.filter(tag => !loaded.has(tag));
+      const missing = requiredTags.filter(tag => !loaded.has(tag) || !loaded.get(tag));
+
       if (missing.length) {
-        throw new Error(`Faltan pistas para: ${missing.join(", ")}.`);
+        throw new Error(`Faltan pistas o están vacías para: ${missing.join(", ")}.`);
       }
 
       pistas = loaded;
-      csvLoaded = true;
+      pistasLoaded = true;
       startButton.disabled = false;
-      expectedTag.textContent = pistas.get("TAG_INICIO");
-      setStatus("Pistas cargadas correctamente. Ya puedes activar el lector NFC.", "good");
       render();
+      setStatus("Pistas cargadas correctamente. Ya puedes activar el lector NFC.", "good");
     } catch (error) {
-      csvLoaded = false;
+      pistasLoaded = false;
       startButton.disabled = true;
       expectedTag.textContent = "No se pudieron cargar las pistas";
-      instruction.textContent = "Revisa que el archivo CSV esté junto a index.html y tenga las columnas TAG y Pista.";
+      instruction.textContent = "Revisa que pistas.json esté en la misma carpeta que index.html y contenga un JSON válido.";
       setStatus(error.message, "error");
     }
   }
@@ -475,8 +424,8 @@
   }
 
   async function startScanning() {
-    if (!csvLoaded) {
-      setStatus("Primero deben cargarse las pistas desde pistas.csv.", "error");
+    if (!pistasLoaded) {
+      setStatus("Primero deben cargarse las pistas desde pistas.json.", "error");
       return;
     }
 
