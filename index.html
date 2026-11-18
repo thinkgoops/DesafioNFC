@@ -226,7 +226,7 @@
       <div class="step-label" style="text-align:center">Desafío completado</div>
       <h2 style="text-align:center; font-size:2rem; margin:8px 0 10px">¡Lo lograste!</h2>
       <p style="text-align:center; color:var(--muted); line-height:1.5; margin-bottom:24px">
-        Escaneaste todas las etiquetas en el orden correcto y confirmaste el recorrido volviendo a TAG_INICIO.
+        Escaneaste todas las etiquetas en el orden correcto y finalizaste el recorrido con la etiqueta de cierre.
       </p>
       <button id="againButton" type="button">Volver a jugar</button>
     </div>
@@ -250,6 +250,8 @@
   let scanning = false;
   let lastReadValue = "";
   let lastReadAt = 0;
+  let pistas = new Map();
+  let csvLoaded = false;
 
   const game = document.getElementById("game");
   const complete = document.getElementById("complete");
@@ -274,13 +276,84 @@
   }
 
   function getInstruction() {
-    if (currentIndex === 0) {
-      return "Para comenzar, acerca el teléfono a la etiqueta de inicio.";
-    }
     if (currentIndex === totalSteps - 1) {
-      return "¡Último paso! Vuelve a escanear TAG_INICIO para confirmar el recorrido.";
+      return "¡Último paso! Busca la etiqueta de finalización indicada por esta pista.";
     }
-    return `¡Correcto! Ahora busca y escanea ${sequence[currentIndex]}.`;
+    if (currentIndex === 0) {
+      return "Busca el lugar indicado por esta pista para comenzar el desafío.";
+    }
+    return "Busca el lugar indicado por la pista y acerca el teléfono a la etiqueta NFC.";
+  }
+
+  // Parser CSV sencillo que admite campos entre comillas y punto y coma dentro de ellos.
+  function parseCSVLine(line) {
+    const fields = [];
+    let field = "";
+    let quoted = false;
+
+    for (let i = 0; i < line.length; i++) {
+      const char = line[i];
+      if (char === '"') {
+        if (quoted && line[i + 1] === '"') {
+          field += '"';
+          i++;
+        } else {
+          quoted = !quoted;
+        }
+      } else if (char === ";" && !quoted) {
+        fields.push(field.trim());
+        field = "";
+      } else {
+        field += char;
+      }
+    }
+    fields.push(field.trim());
+    return fields;
+  }
+
+  async function loadClues() {
+    try {
+      const response = await fetch("./pistas.csv", { cache: "no-store" });
+      if (!response.ok) throw new Error(`No se pudo cargar pistas.csv (HTTP ${response.status}).`);
+
+      const csvText = (await response.text()).replace(/^\\uFEFF/, "");
+      const lines = csvText.split(/\\r?\\n/).filter(line => line.trim() !== "");
+      if (lines.length < 2) throw new Error("El archivo pistas.csv está vacío o no contiene pistas.");
+
+      const headers = parseCSVLine(lines[0]).map(header => header.toLowerCase());
+      const tagColumn = headers.indexOf("tag");
+      const clueColumn = headers.indexOf("pista");
+      if (tagColumn === -1 || clueColumn === -1) {
+        throw new Error('El CSV debe tener las columnas "TAG;Pista".');
+      }
+
+      const loaded = new Map();
+      for (const line of lines.slice(1)) {
+        const columns = parseCSVLine(line);
+        const tag = (columns[tagColumn] || "").trim();
+        const clue = (columns[clueColumn] || "").trim();
+        if (tag && clue) loaded.set(tag, clue);
+      }
+
+      const requiredTags = ["TAG_INICIO", ...middleTags, "TAG_FINAL"];
+      const missing = requiredTags.filter(tag => !loaded.has(tag));
+      if (missing.length) {
+        throw new Error(`Faltan pistas para: ${missing.join(", ")}.`);
+      }
+
+      pistas = loaded;
+      csvLoaded = true;
+      startButton.disabled = false;
+      expectedTag.textContent = pistas.get("TAG_INICIO");
+      setStatus("Pistas cargadas correctamente. Ya puedes activar el lector NFC.", "good");
+      render();
+    } catch (error) {
+      csvLoaded = false;
+      startButton.disabled = true;
+      expectedTag.textContent = "No se pudieron cargar las pistas";
+      instruction.textContent = "Revisa que pistas.csv esté en la misma carpeta que la aplicación y tenga las columnas TAG;Pista.";
+      setStatus(error.message, "error");
+    }
   }
 
   function setStatus(message, type = "") {
@@ -299,7 +372,8 @@
       return;
     }
 
-    expectedTag.textContent = sequence[currentIndex];
+    const currentTag = sequence[currentIndex];
+    expectedTag.textContent = pistas.get(currentTag) || "Pista no disponible";
     instruction.textContent = getInstruction();
 
     if (currentIndex === 0) stepLabel.textContent = "Paso 1 · Inicio";
@@ -363,7 +437,7 @@
     if (value === expected) {
       // Al validar el inicio, se crea un nuevo orden aleatorio para TAG_1 a TAG_4.
       if (currentIndex === 0) {
-        sequence = ["TAG_INICIO", ...shuffle(middleTags), "TAG_INICIO"];
+        sequence = ["TAG_INICIO", ...shuffle(middleTags), "TAG_FINAL"];
       }
       currentIndex++;
       if (currentIndex === totalSteps) {
@@ -371,15 +445,20 @@
         setStatus("¡Desafío completado correctamente!", "good");
       } else {
         render();
-        setStatus(`Etiqueta ${value} validada. ¡Continúa con la siguiente!`, "good");
+        setStatus("¡Pista encontrada! Continúa con la siguiente.", "good");
       }
     } else {
-      setStatus(`Etiqueta incorrecta: ${value}. Necesitas escanear ${expected}.`, "error");
+      setStatus("Esa no es la etiqueta que corresponde a la pista actual. ¡Sigue buscando!", "error");
       if (navigator.vibrate) navigator.vibrate([100, 60, 100]);
     }
   }
 
   async function startScanning() {
+    if (!csvLoaded) {
+      setStatus("Primero deben cargarse las pistas desde pistas.csv.", "error");
+      return;
+    }
+
     if (!("NDEFReader" in window)) {
       setStatus("Este navegador no permite leer NFC. Prueba desde Chrome en un teléfono Android compatible.", "error");
       return;
@@ -431,6 +510,8 @@
 
   createDots();
   render();
+  startButton.disabled = true;
+  loadClues();
 })();
 </script>
 </body>
