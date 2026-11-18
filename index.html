@@ -285,8 +285,8 @@
     return "Busca el lugar indicado por la pista y acerca el teléfono a la etiqueta NFC.";
   }
 
-  // Parser CSV sencillo que admite campos entre comillas y punto y coma dentro de ellos.
-  function parseCSVLine(line) {
+  // Parser CSV: admite separador coma o punto y coma, y campos entre comillas.
+  function parseCSVLine(line, delimiter) {
     const fields = [];
     let field = "";
     let quoted = false;
@@ -300,7 +300,7 @@
         } else {
           quoted = !quoted;
         }
-      } else if (char === ";" && !quoted) {
+      } else if (char === delimiter && !quoted) {
         fields.push(field.trim());
         field = "";
       } else {
@@ -311,25 +311,46 @@
     return fields;
   }
 
+  function detectCSVDelimiter(headerLine) {
+    let commas = 0;
+    let semicolons = 0;
+    let quoted = false;
+
+    for (let i = 0; i < headerLine.length; i++) {
+      const char = headerLine[i];
+      if (char === '"') quoted = !quoted;
+      else if (!quoted && char === ",") commas++;
+      else if (!quoted && char === ";") semicolons++;
+    }
+    return semicolons > commas ? ";" : ",";
+  }
+
   async function loadClues() {
     try {
-      const response = await fetch("./pistas.csv", { cache: "no-store" });
-      if (!response.ok) throw new Error(`No se pudo cargar pistas.csv (HTTP ${response.status}).`);
+      // Acepta el nombre recomendado pistas.csv y también pistas(1).csv.
+      let response = await fetch("./pistas.csv", { cache: "no-store" });
+      if (!response.ok) {
+        response = await fetch("./pistas(1).csv", { cache: "no-store" });
+      }
+      if (!response.ok) {
+        throw new Error("No se encontró pistas.csv ni pistas(1).csv. Sube uno de esos archivos junto a index.html.");
+      }
 
       const csvText = (await response.text()).replace(/^\\uFEFF/, "");
       const lines = csvText.split(/\\r?\\n/).filter(line => line.trim() !== "");
-      if (lines.length < 2) throw new Error("El archivo pistas.csv está vacío o no contiene pistas.");
+      if (lines.length < 2) throw new Error("El archivo CSV está vacío o no contiene pistas.");
 
-      const headers = parseCSVLine(lines[0]).map(header => header.toLowerCase());
+      const delimiter = detectCSVDelimiter(lines[0]);
+      const headers = parseCSVLine(lines[0], delimiter).map(header => header.toLowerCase());
       const tagColumn = headers.indexOf("tag");
       const clueColumn = headers.indexOf("pista");
       if (tagColumn === -1 || clueColumn === -1) {
-        throw new Error('El CSV debe tener las columnas "TAG;Pista".');
+        throw new Error('El CSV debe tener las columnas TAG y Pista, separadas por coma o punto y coma.');
       }
 
       const loaded = new Map();
       for (const line of lines.slice(1)) {
-        const columns = parseCSVLine(line);
+        const columns = parseCSVLine(line, delimiter);
         const tag = (columns[tagColumn] || "").trim();
         const clue = (columns[clueColumn] || "").trim();
         if (tag && clue) loaded.set(tag, clue);
@@ -351,7 +372,7 @@
       csvLoaded = false;
       startButton.disabled = true;
       expectedTag.textContent = "No se pudieron cargar las pistas";
-      instruction.textContent = "Revisa que pistas.csv esté en la misma carpeta que la aplicación y tenga las columnas TAG;Pista.";
+      instruction.textContent = "Revisa que el archivo CSV esté junto a index.html y tenga las columnas TAG y Pista.";
       setStatus(error.message, "error");
     }
   }
