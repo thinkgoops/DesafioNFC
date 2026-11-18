@@ -1,0 +1,428 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#111827">
+  <title>Desafío NFC</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #0b1020;
+      --panel: #151d31;
+      --panel-2: #202b43;
+      --text: #f7f8fc;
+      --muted: #aab5ca;
+      --accent: #71e0bd;
+      --accent-dark: #163d36;
+      --warning: #ffd479;
+      --danger: #ff8d9a;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100svh;
+      padding: max(22px, env(safe-area-inset-top)) 18px max(24px, env(safe-area-inset-bottom));
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      background: radial-gradient(ellipse at top, #1b2944 0%, var(--bg) 65%);
+      color: var(--text);
+      font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+    main { width: 100%; max-width: 480px; }
+    .brand {
+      text-align: center;
+      color: var(--accent);
+      font-size: .78rem;
+      font-weight: 800;
+      letter-spacing: .18em;
+      text-transform: uppercase;
+      margin-bottom: 12px;
+    }
+    h1 {
+      margin: 0;
+      text-align: center;
+      font-size: clamp(2rem, 9vw, 2.8rem);
+      line-height: 1.05;
+    }
+    .intro {
+      margin: 12px auto 24px;
+      max-width: 340px;
+      text-align: center;
+      color: var(--muted);
+      line-height: 1.5;
+    }
+    .card {
+      background: rgba(21, 29, 49, .96);
+      border: 1px solid rgba(255,255,255,.09);
+      border-radius: 24px;
+      padding: 22px;
+      box-shadow: 0 18px 55px rgba(0,0,0,.28);
+    }
+    .progress-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      color: var(--muted);
+      font-size: .88rem;
+      margin-bottom: 10px;
+    }
+    .progress-track {
+      height: 8px;
+      background: #303b52;
+      border-radius: 99px;
+      overflow: hidden;
+      margin-bottom: 26px;
+    }
+    .progress-fill {
+      height: 100%;
+      width: 0%;
+      background: var(--accent);
+      border-radius: inherit;
+      transition: width .3s ease;
+    }
+    .step-label {
+      color: var(--accent);
+      font-size: .78rem;
+      font-weight: 800;
+      letter-spacing: .12em;
+      text-transform: uppercase;
+      margin-bottom: 8px;
+    }
+    #expectedTag {
+      font-size: clamp(1.9rem, 9vw, 2.6rem);
+      font-weight: 850;
+      letter-spacing: .025em;
+      overflow-wrap: anywhere;
+      margin: 0 0 8px;
+    }
+    #instruction {
+      color: var(--muted);
+      line-height: 1.45;
+      margin: 0 0 22px;
+      min-height: 44px;
+    }
+    .scan-symbol {
+      width: 112px;
+      height: 112px;
+      border: 2px solid rgba(113,224,189,.35);
+      border-radius: 28px;
+      display: grid;
+      place-items: center;
+      margin: 0 auto 20px;
+      background: rgba(113,224,189,.07);
+      position: relative;
+    }
+    .scan-symbol::before, .scan-symbol::after {
+      content: "";
+      position: absolute;
+      border: 2px solid var(--accent);
+      border-radius: 22px;
+      inset: 13px;
+      opacity: .7;
+    }
+    .scan-symbol::after {
+      inset: 27px;
+      border-radius: 15px;
+      opacity: .45;
+    }
+    .scan-symbol span { font-size: 2.5rem; z-index: 1; }
+    button {
+      width: 100%;
+      min-height: 56px;
+      border: 0;
+      border-radius: 16px;
+      padding: 14px 18px;
+      font: inherit;
+      font-weight: 800;
+      font-size: 1rem;
+      cursor: pointer;
+      color: #08251e;
+      background: var(--accent);
+      touch-action: manipulation;
+    }
+    button:disabled { opacity: .45; cursor: not-allowed; }
+    .secondary {
+      margin-top: 10px;
+      color: var(--text);
+      background: var(--panel-2);
+      border: 1px solid rgba(255,255,255,.1);
+    }
+    #status {
+      margin-top: 16px;
+      min-height: 48px;
+      padding: 13px 14px;
+      border-radius: 13px;
+      background: #202b43;
+      color: var(--muted);
+      text-align: center;
+      font-size: .92rem;
+      line-height: 1.4;
+    }
+    #status.good { color: var(--accent); background: var(--accent-dark); }
+    #status.warn { color: var(--warning); }
+    #status.error { color: var(--danger); }
+    .steps {
+      display: flex;
+      gap: 7px;
+      margin-top: 20px;
+    }
+    .step-dot {
+      flex: 1;
+      height: 6px;
+      border-radius: 99px;
+      background: #354159;
+    }
+    .step-dot.done { background: var(--accent); }
+    .step-dot.current { background: var(--warning); }
+    .footnote {
+      text-align: center;
+      color: #8491a9;
+      font-size: .78rem;
+      line-height: 1.45;
+      margin: 18px 8px 0;
+    }
+    .hidden { display: none !important; }
+    .success-mark {
+      color: var(--accent);
+      font-size: 4rem;
+      line-height: 1;
+      margin: 4px 0 12px;
+      text-align: center;
+    }
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { transition: none !important; }
+    }
+  </style>
+</head>
+<body>
+<main>
+  <div class="brand">Experiencia NFC</div>
+  <h1>Desafío de escaneo</h1>
+  <p class="intro">Escanea las etiquetas en el orden indicado para completar el recorrido.</p>
+
+  <section class="card" aria-live="polite">
+    <div id="game">
+      <div class="progress-top">
+        <span>Progreso</span>
+        <strong id="progressText">0 de 6</strong>
+      </div>
+      <div class="progress-track"><div class="progress-fill" id="progressFill"></div></div>
+
+      <div class="step-label" id="stepLabel">Primer paso</div>
+      <h2 id="expectedTag">TAG_INICIO</h2>
+      <p id="instruction">Para comenzar, acerca el teléfono a la etiqueta de inicio.</p>
+
+      <div class="scan-symbol" aria-hidden="true"><span>⌁</span></div>
+      <button id="startButton" type="button">Activar lector NFC</button>
+      <button id="resetButton" class="secondary" type="button">Reiniciar desafío</button>
+      <div id="status" role="status">Pulsa “Activar lector NFC” y acepta el permiso si el navegador lo solicita.</div>
+      <div class="steps" id="stepDots" aria-hidden="true"></div>
+    </div>
+
+    <div id="complete" class="hidden">
+      <div class="success-mark">✓</div>
+      <div class="step-label" style="text-align:center">Desafío completado</div>
+      <h2 style="text-align:center; font-size:2rem; margin:8px 0 10px">¡Lo lograste!</h2>
+      <p style="text-align:center; color:var(--muted); line-height:1.5; margin-bottom:24px">
+        Escaneaste todas las etiquetas en el orden correcto y confirmaste el recorrido volviendo a TAG_INICIO.
+      </p>
+      <button id="againButton" type="button">Volver a jugar</button>
+    </div>
+  </section>
+
+  <p class="footnote">
+    Requiere un teléfono Android con NFC y un navegador compatible (por ejemplo, Chrome).
+    La página debe estar publicada mediante HTTPS.
+  </p>
+</main>
+
+<script>
+(() => {
+  // Orden del desafío: inicio, cuatro etiquetas y confirmación final del inicio.
+  const sequence = [
+    "TAG_INICIO",
+    "TAG_1",
+    "TAG_2",
+    "TAG_3",
+    "TAG_4",
+    "TAG_INICIO"
+  ];
+
+  let currentIndex = 0;
+  let reader = null;
+  let scanning = false;
+  let lastReadValue = "";
+  let lastReadAt = 0;
+
+  const game = document.getElementById("game");
+  const complete = document.getElementById("complete");
+  const expectedTag = document.getElementById("expectedTag");
+  const instruction = document.getElementById("instruction");
+  const stepLabel = document.getElementById("stepLabel");
+  const statusBox = document.getElementById("status");
+  const startButton = document.getElementById("startButton");
+  const resetButton = document.getElementById("resetButton");
+  const againButton = document.getElementById("againButton");
+  const progressText = document.getElementById("progressText");
+  const progressFill = document.getElementById("progressFill");
+  const stepDots = document.getElementById("stepDots");
+
+  const prompts = [
+    "Para comenzar, acerca el teléfono a la etiqueta de inicio.",
+    "¡Inicio validado! Ahora busca y escanea TAG_1.",
+    "¡Correcto! Ahora escanea TAG_2.",
+    "¡Correcto! Ahora escanea TAG_3.",
+    "¡Correcto! Ahora escanea TAG_4.",
+    "¡Último paso! Vuelve a escanear la etiqueta TAG_INICIO para confirmar el recorrido."
+  ];
+
+  function setStatus(message, type = "") {
+    statusBox.textContent = message;
+    statusBox.className = type;
+  }
+
+  function render() {
+    const completedSteps = currentIndex;
+    progressText.textContent = `${completedSteps} de ${sequence.length}`;
+    progressFill.style.width = `${(completedSteps / sequence.length) * 100}%`;
+
+    if (currentIndex >= sequence.length) {
+      game.classList.add("hidden");
+      complete.classList.remove("hidden");
+      return;
+    }
+
+    expectedTag.textContent = sequence[currentIndex];
+    instruction.textContent = prompts[currentIndex];
+
+    if (currentIndex === 0) stepLabel.textContent = "Paso 1 · Inicio";
+    else if (currentIndex === sequence.length - 1) stepLabel.textContent = "Paso final · Confirmación";
+    else stepLabel.textContent = `Paso ${currentIndex + 1} · En progreso`;
+
+    [...stepDots.children].forEach((dot, index) => {
+      dot.className = "step-dot";
+      if (index < currentIndex) dot.classList.add("done");
+      if (index === currentIndex) dot.classList.add("current");
+    });
+  }
+
+  function createDots() {
+    stepDots.innerHTML = "";
+    sequence.forEach(() => {
+      const dot = document.createElement("div");
+      dot.className = "step-dot";
+      stepDots.appendChild(dot);
+    });
+  }
+
+  // Los registros NDEF de texto incluyen un byte de estado y un código de idioma.
+  function readTextRecord(record) {
+    const bytes = new Uint8Array(record.data);
+    if (bytes.length === 0) return "";
+
+    const statusByte = bytes[0];
+    const languageLength = statusByte & 0x3F;
+    const textBytes = bytes.slice(1 + languageLength);
+    const encoding = (statusByte & 0x80) ? "utf-16" : "utf-8";
+
+    return new TextDecoder(encoding).decode(textBytes).trim();
+  }
+
+  function extractTagText(event) {
+    for (const record of event.message.records) {
+      if (record.recordType === "text") {
+        const value = readTextRecord(record);
+        if (value) return value;
+      }
+    }
+    return "";
+  }
+
+  function handleReading(event) {
+    const value = extractTagText(event);
+
+    if (!value) {
+      setStatus("La etiqueta no contiene un registro de texto NDEF reconocible. Revisa cómo fue grabada.", "warn");
+      return;
+    }
+
+    // Evita procesar varias veces la misma lectura mientras el teléfono sigue sobre la etiqueta.
+    const now = Date.now();
+    if (value === lastReadValue && now - lastReadAt < 1800) return;
+    lastReadValue = value;
+    lastReadAt = now;
+
+    const expected = sequence[currentIndex];
+
+    if (value === expected) {
+      currentIndex++;
+      if (currentIndex === sequence.length) {
+        render();
+        setStatus("¡Desafío completado correctamente!", "good");
+      } else {
+        render();
+        setStatus(`Etiqueta ${value} validada. ¡Continúa con la siguiente!`, "good");
+      }
+    } else {
+      setStatus(`Etiqueta incorrecta: ${value}. Necesitas escanear ${expected}.`, "error");
+      if (navigator.vibrate) navigator.vibrate([100, 60, 100]);
+    }
+  }
+
+  async function startScanning() {
+    if (!("NDEFReader" in window)) {
+      setStatus("Este navegador no permite leer NFC. Prueba desde Chrome en un teléfono Android compatible.", "error");
+      return;
+    }
+
+    if (scanning) {
+      setStatus("Lector NFC activo. Acerca una etiqueta al teléfono.", "good");
+      return;
+    }
+
+    try {
+      reader = new NDEFReader();
+      await reader.scan();
+      scanning = true;
+      reader.onreading = handleReading;
+      reader.onreadingerror = () => {
+        setStatus("No se pudo leer la etiqueta. Mantén el teléfono cerca e inténtalo otra vez.", "warn");
+      };
+
+      startButton.textContent = "Lector NFC activo";
+      startButton.disabled = true;
+      setStatus("Lector activado. Acerca la etiqueta indicada a la parte posterior del teléfono.", "good");
+    } catch (error) {
+      let message = "No se pudo iniciar el lector NFC.";
+      if (error.name === "NotAllowedError") message = "Permiso NFC denegado. Revisa los permisos del navegador.";
+      if (error.name === "NotSupportedError") message = "Este dispositivo o navegador no admite Web NFC.";
+      if (error.name === "SecurityError") message = "La lectura NFC requiere una página segura HTTPS.";
+      setStatus(`${message} (${error.message})`, "error");
+    }
+  }
+
+  function resetChallenge() {
+    currentIndex = 0;
+    lastReadValue = "";
+    lastReadAt = 0;
+    game.classList.remove("hidden");
+    complete.classList.add("hidden");
+    render();
+    setStatus(scanning
+      ? "Desafío reiniciado. El lector sigue activo: escanea TAG_INICIO."
+      : "Desafío reiniciado. Activa el lector NFC para comenzar.");
+    if (scanning) statusBox.classList.add("good");
+  }
+
+  startButton.addEventListener("click", startScanning);
+  resetButton.addEventListener("click", resetChallenge);
+  againButton.addEventListener("click", resetChallenge);
+
+  createDots();
+  render();
+})();
+</script>
+</body>
+</html>
