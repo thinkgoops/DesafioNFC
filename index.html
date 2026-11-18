@@ -356,6 +356,13 @@
     const currentTag = sequence[currentIndex];
     const entry = pistas.get(currentTag);
 
+    // Protección adicional mientras se carga el JSON.
+    if (!entry) {
+      expectedTag.textContent = "Cargando desafío...";
+      instruction.textContent = "Estamos preparando las pistas. Espera un momento.";
+      return;
+    }
+
     if (awaitingNext) {
       expectedTag.textContent = entry.felicitacion;
       instruction.textContent = currentIndex === totalSteps - 1
@@ -521,7 +528,7 @@
   nextButton.addEventListener("click", showNextStep);
 
   createDots();
-  render();
+  // Esperar a que pistas.json esté cargado antes de renderizar la primera pista.
   startButton.disabled = true;
   loadClues();
 })();
