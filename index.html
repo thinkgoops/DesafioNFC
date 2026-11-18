@@ -317,24 +317,23 @@
     });
   }
 
-  // Los registros NDEF de texto incluyen un byte de estado y un código de idioma.
-  function readTextRecord(record) {
-    const bytes = new Uint8Array(record.data);
-    if (bytes.length === 0) return "";
-
-    const statusByte = bytes[0];
-    const languageLength = statusByte & 0x3F;
-    const textBytes = bytes.slice(1 + languageLength);
-    const encoding = (statusByte & 0x80) ? "utf-16" : "utf-8";
-
-    return new TextDecoder(encoding).decode(textBytes).trim();
-  }
-
+  // En Web NFC, record.data para un registro "text" contiene el texto ya separado
+  // del encabezado NDEF (idioma/estado). Algunos grabadores también pueden
+  // almacenar el contenido como un registro MIME "text/plain".
   function extractTagText(event) {
     for (const record of event.message.records) {
-      if (record.recordType === "text") {
-        const value = readTextRecord(record);
-        if (value) return value;
+      const isTextRecord = record.recordType === "text";
+      const isPlainTextMime = record.recordType === "mime" &&
+        (record.mediaType || "").toLowerCase().split(";")[0] === "text/plain";
+
+      if (isTextRecord || isPlainTextMime) {
+        try {
+          const encoding = isTextRecord ? (record.encoding || "utf-8") : "utf-8";
+          const value = new TextDecoder(encoding).decode(record.data).trim();
+          if (value) return value;
+        } catch (error) {
+          console.warn("No se pudo decodificar el registro NFC:", error);
+        }
       }
     }
     return "";
